@@ -60,7 +60,7 @@ executable BatchMTLR
   -- other-extensions:    
   
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.6 && <4.7
+  build-depends:       base >=4.6 && <4.7, process >=1.0
   
   -- Directories containing source files.
   -- hs-source-dirs:      
