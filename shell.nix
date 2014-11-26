@@ -8,7 +8,7 @@ haskellPackages.cabal.mkDerivation (self: {
   src = ./.;
   isLibrary = false;
   isExecutable = true;
-  buildDepends = with haskellPackages; [ directoryTree ];
+  buildDepends = with haskellPackages; [ directoryTree cmdargs ];
   buildTools = with haskellPackages; [ cabalInstall ];
   meta = {
     homepage = "https://github.com/Chobbes/BatchMTLR";

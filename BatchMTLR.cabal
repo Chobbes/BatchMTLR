@@ -51,7 +51,7 @@ cabal-version:       >=1.10
 
 executable BatchMTLR
   -- .hs or .lhs file containing the Main module.
-  -- main-is:             
+  main-is: BatchMTLR/Main.hs
   
   -- Modules included in this executable, other than Main.
   -- other-modules:       
@@ -60,7 +60,7 @@ executable BatchMTLR
   -- other-extensions:    
   
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.6 && <4.7, process >=1.0, directory-tree >=0.12
+  build-depends:       base >=4.6 && <4.8, process >=1.0, directory-tree >=0.12, cmdargs >=0.10
   
   -- Directories containing source files.
   -- hs-source-dirs:      
