@@ -27,7 +27,8 @@ import Prelude hiding (concatMap)
 
 import Control.Monad
 
-import Data.Foldable hiding (mapM_)
+import Data.List
+import qualified Data.Foldable as F
 
 import System.IO
 import System.Console.CmdArgs
@@ -42,7 +43,7 @@ data MTLRArgs = MTLRTrain { regConst1 :: Integer
                           , output :: FilePath
                           , timePoints :: Integer
                           , weight :: FilePath
-                          , uncensored :: Bool
+                          , uncensored :: Integer
                           , intervalFile :: FilePath
                           }
                           
@@ -52,7 +53,7 @@ data MTLRArgs = MTLRTrain { regConst1 :: Integer
                          , survivalThreshold :: Integer
                          , loss :: String
                          , printDistribution :: Bool
-                         , uncensored :: Bool
+                         , uncensored :: Integer
                          , intervalFile :: FilePath
                          }
 
@@ -60,21 +61,21 @@ data MTLRArgs = MTLRTrain { regConst1 :: Integer
 
 trainArgs = MTLRTrain { regConst1 = 1 &= explicit &= name "c" &= help "specify regularization constant C1 (default: 1)"
                       , regConst2 = 1 &= explicit &= name "d" &= help "specify regularization constant C2 (default: 1)"
-                      , input = def &= explicit &= name "i" &= typDir &= help "input directory"
+                      , input = "" &= explicit &= name "i" &= typDir &= help "input directory"
                       , output = "train-output" &= explicit &= name "o" &= typDir &= help "output directory"
                       , timePoints = 60 &= explicit &= name "m" &= help "specify the number of time points (default: 60)"
                       , weight = def &= explicit &= name "w" &= help "specify the weight (model) filename used to initialize EM training for censored targets"
-                      , uncensored = def &= explicit &= name "u" &= help "treats all input examples during training as uncensored"
+                      , uncensored = 1 &= explicit &= name "u" &= help "treats all input examples during training as uncensored"
                       , intervalFile = def &= explicit &= name "q" &= help "interval file"
                       } &= help "Run MTLR training on a directory of data." &= explicit &= name "train"
 
-testArgs = MTLRTest { input = def &= explicit &= name "i" &= typDir &= help "input directory"
-                    , output = "test-output" &= explicit &= name "o" &= typDir &= help "output directory"
+testArgs = MTLRTest { input = "train-output" &= explicit &= name "i" &= typDir &= help "input directory"
+                    , output = "test-output" &= explicit &= name "o" &= typDir &= help "model directory"
                     , timePoints = 60 &= explicit &= name "m" &= help "specify the number of time points (default: 60)"
                     , survivalThreshold = 30 &= explicit &= name "t" &= help "survival classification threashold"
                     , loss = "l1" &= explicit &= name "l" &= help "type of loss to optimize"
-                    , printDistribution = def &= explicit &= name "p" &= help "print the survival distribution"
-                    , uncensored = def &= explicit &= name "u" &= help "treats all input examples during training as uncensored"
+                    , printDistribution = False &= explicit &= name "p" &= help "print the survival distribution"
+                    , uncensored = 1 &= explicit &= name "u" &= help "treats all input examples during training as uncensored"
                     , intervalFile = def &= explicit &= name "q" &= help "interval file"
                     } &= help "Run MTLR testing on a directory of data." &= explicit &= name "test"
 
@@ -83,32 +84,51 @@ main = do args <- cmdArgs (modes [trainArgs, testArgs] &= program "BatchMTLR")
             MTLRTrain {input=""} -> error "Please specify an input directory!"
             MTLRTrain {} -> train args
             MTLRTest {input=""} -> error "Please specify an input directory!"
-            MTLRTest {} -> undefined
+            MTLRTest {} -> test args
 
-
+ 
 -- | Run MTLR training.
 train args = do dir <- readDirectoryWith return (input args)
-                let filePairs =  map (createFilePair "model" (output args)) . toList $ dirTree dir
-                handles <- runEverything  (proc "mtlr_train" mtlrArgs) {std_out = CreatePipe} filePairs
+                let filePairs =  map (fileToArgs (output args)) . F.toList $ dirTree dir
+                handles <- runEverything  (proc' "mtlr_train" mtlrArgs) {std_out = CreatePipe} filePairs
                 mapM_ wait handles
   where wait (_,Just hout,_,processHandle) = do {output <- hGetContents hout; putStrLn output}
         mtlrArgs = [ "-c", show $ regConst1 args, "-d", show $ regConst2 args, "-m"
                    , show $ timePoints args, "-w", weight args
-                   , "-u", if uncensored args then "1" else "0"
+                   , "-u", show $ uncensored args
+                   , "-q", intervalFile args
+                   ]
+
+-- | Run MTLR testing.
+test args = do dir <- readDirectoryWith return (input args)
+               let filePairs =  map (fileToArgs (output args)) . F.toList $ dirTree dir
+               handles <- runEverything  (proc' "mtlr_test" mtlrArgs) {std_out = CreatePipe} filePairs
+               mapM_ wait handles
+  where wait (_,Just hout,_,processHandle) = do {output <- hGetContents hout; putStrLn output}
+        mtlrArgs = [ "-m", show $ timePoints args, "-l", loss args
+                   , if printDistribution args then "-p" else ""
+                   , "-u", show $ uncensored args
                    , "-q", intervalFile args
                    ]
                    
-createFilePair :: String -> FilePath -> FilePath -> (FilePath, FilePath)
-createFilePair outExt outDir inFile = (inFile, outFile)
-  where outFile = combine outDir . joinPath . tail . splitPath $ replaceExtension inFile outExt
+fileToArgs :: FilePath -> FilePath -> [ArgumentFile]
+fileToArgs modelDir inFile = [("-i", inFile), ("-o", modelFile)]
+  where modelFile = combine modelDir . joinPath . tail . splitPath $ replaceExtension inFile "model"
 
-runEverything :: CreateProcess -> [(FilePath, FilePath)] -> IO [(Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)]
-runEverything process = mapM (runFilePair process)
+proc' = proc
 
-runFilePair :: CreateProcess -> (FilePath, FilePath) -> IO (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)
-runFilePair process (inFile, outFile) = do createDirectoryIfMissing True (takeDirectory outFile)
-                                           createProcess newProcess
+type ArgumentFile = (String, FilePath)
+
+runEverything :: CreateProcess -> [[ArgumentFile]] -> IO [(Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)]
+runEverything process = mapM (runFileArgs process)
+
+runFileArgs :: CreateProcess -> [ArgumentFile] -> IO (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)
+runFileArgs process files = do mapM_ (createDirectoryIfMissing True) dirs
+                               createProcess newProcess
   where newProcess = process {cmdspec = newSpec}
+        dirs = map (takeDirectory . snd) files
+        fileArgs = concatMap (\(arg, file) -> [arg, file]) files
         newSpec = case cmdspec process of
-                      (ShellCommand str) -> ShellCommand (str ++ " -i " ++ inFile ++ " -o " ++ outFile)
-                      (RawCommand cmd args) -> RawCommand cmd (args ++ ["-i", inFile, "-o", outFile])
+                      (ShellCommand str) -> ShellCommand (str ++ " " ++ (concat $ intersperse " " fileArgs))
+                      (RawCommand cmd args) -> RawCommand cmd (args ++ fileArgs)
+
