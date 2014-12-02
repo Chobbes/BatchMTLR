@@ -55,6 +55,7 @@ data MTLRArgs = MTLRTrain { regConst1 :: Integer
                          , printDistribution :: Bool
                          , uncensored :: Integer
                          , intervalFile :: FilePath
+                         , printDir :: FilePath
                          }
 
                 deriving (Show, Data, Typeable) 
@@ -77,6 +78,7 @@ testArgs = MTLRTest { input = def &= explicit &= name "i" &= typDir &= help "inp
                     , printDistribution = False &= explicit &= name "p" &= help "print the survival distribution"
                     , uncensored = 1 &= explicit &= name "u" &= help "treats all input examples during training as uncensored"
                     , intervalFile = def &= explicit &= name "q" &= help "interval file"
+                    , printDir = "test-output" &= explicit &= name "z" &= help "Where to print the output."
                     } &= help "Run MTLR testing on a directory of data." &= explicit &= name "test"
 
 main = do args <- cmdArgs (modes [trainArgs, testArgs] &= program "BatchMTLR")
@@ -101,10 +103,15 @@ train args = do dir <- readDirectoryWith return (input args)
 
 -- | Run MTLR testing.
 test args = do dir <- readDirectoryWith return (input args)
+
                let filePairs =  map (fileToArgs (output args)) . F.toList $ dirTree dir
+               let fileOutputs = map fileToPrint . F.toList $ dirTree dir
+
                handles <- runEverything  (proc' "mtlr_test" mtlrArgs) {std_out = CreatePipe} filePairs
-               mapM_ wait handles
-  where wait (_,Just hout,_,processHandle) = do {output <- hGetContents hout; putStrLn output}
+               mapM_ wait (zip fileOutputs handles)
+
+  where fileToPrint inFile = combine (printDir args) . joinPath . tail . splitPath $ replaceExtension inFile "out"
+        wait (outFile, (_,Just hout,_,processHandle)) = do {createDirectoryIfMissing True (takeDirectory outFile); output <- hGetContents hout; writeFile outFile output}
         mtlrArgs = [ "-m", show $ timePoints args, "-l", loss args
                    , if printDistribution args then "-p" else ""
                    , "-u", show $ uncensored args
