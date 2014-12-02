@@ -96,7 +96,7 @@ train args = do dir <- readDirectoryWith return (input args)
         mtlrArgs = [ "-c", show $ regConst1 args, "-d", show $ regConst2 args, "-m"
                    , show $ timePoints args, "-w", weight args
                    , "-u", show $ uncensored args
-                   , "-q", intervalFile args
+                   , if intervalFile args /= "" then "-q" else "", intervalFile args
                    ]
 
 -- | Run MTLR testing.
