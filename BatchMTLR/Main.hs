@@ -61,16 +61,16 @@ data MTLRArgs = MTLRTrain { regConst1 :: Integer
 
 trainArgs = MTLRTrain { regConst1 = 1 &= explicit &= name "c" &= help "specify regularization constant C1 (default: 1)"
                       , regConst2 = 1 &= explicit &= name "d" &= help "specify regularization constant C2 (default: 1)"
-                      , input = "" &= explicit &= name "i" &= typDir &= help "input directory"
-                      , output = "train-output" &= explicit &= name "o" &= typDir &= help "output directory"
+                      , input = def &= explicit &= name "i" &= typDir &= help "input directory"
+                      , output = def &= explicit &= name "o" &= typDir &= help "output directory"
                       , timePoints = 60 &= explicit &= name "m" &= help "specify the number of time points (default: 60)"
                       , weight = def &= explicit &= name "w" &= help "specify the weight (model) filename used to initialize EM training for censored targets"
                       , uncensored = 1 &= explicit &= name "u" &= help "treats all input examples during training as uncensored"
                       , intervalFile = def &= explicit &= name "q" &= help "interval file"
                       } &= help "Run MTLR training on a directory of data." &= explicit &= name "train"
 
-testArgs = MTLRTest { input = "train-output" &= explicit &= name "i" &= typDir &= help "input directory"
-                    , output = "test-output" &= explicit &= name "o" &= typDir &= help "model directory"
+testArgs = MTLRTest { input = def &= explicit &= name "i" &= typDir &= help "input directory"
+                    , output = def &= explicit &= name "o" &= typDir &= help "model directory"
                     , timePoints = 60 &= explicit &= name "m" &= help "specify the number of time points (default: 60)"
                     , survivalThreshold = 30 &= explicit &= name "t" &= help "survival classification threashold"
                     , loss = "l1" &= explicit &= name "l" &= help "type of loss to optimize"
@@ -108,7 +108,7 @@ test args = do dir <- readDirectoryWith return (input args)
         mtlrArgs = [ "-m", show $ timePoints args, "-l", loss args
                    , if printDistribution args then "-p" else ""
                    , "-u", show $ uncensored args
-                   , "-q", intervalFile args
+                   , if intervalFile args /= "" then "-q" else "", intervalFile args
                    ]
                    
 fileToArgs :: FilePath -> FilePath -> [ArgumentFile]
@@ -131,4 +131,3 @@ runFileArgs process files = do mapM_ (createDirectoryIfMissing True) dirs
         newSpec = case cmdspec process of
                       (ShellCommand str) -> ShellCommand (str ++ " " ++ (concat $ intersperse " " fileArgs))
                       (RawCommand cmd args) -> RawCommand cmd (args ++ fileArgs)
-
