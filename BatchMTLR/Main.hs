@@ -132,7 +132,7 @@ test args = do dir <- readDirectoryWith return (input args)
 imputation args = do dir <- readDirectoryWith return (input args)
                      let files = F.toList $ dirTree dir
                      mapM_ runImputation files
-  where runImputation f = callProcess "Rscript" ["imputation.R", method args ++ ".imp", f]
+  where runImputation f = callProcess "Rscript" ["run_script.R", method args ++ ".imp", f, "10"]
 
 fileToArgs :: FilePath -> FilePath -> [ArgumentFile]
 fileToArgs modelDir inFile = [("-i", inFile), ("-o", modelFile)]
