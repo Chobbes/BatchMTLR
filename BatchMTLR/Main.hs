@@ -57,6 +57,10 @@ data MTLRArgs = MTLRTrain { regConst1 :: Integer
                          , intervalFile :: FilePath
                          , printDir :: FilePath
                          }
+                         
+              | MTLRImputation { input :: FilePath
+                               , method :: String
+                               }
 
                 deriving (Show, Data, Typeable) 
 
@@ -80,6 +84,10 @@ testArgs = MTLRTest { input = def &= explicit &= name "i" &= typDir &= help "inp
                     , intervalFile = def &= explicit &= name "q" &= help "interval file"
                     , printDir = "test-output" &= explicit &= name "z" &= help "Where to print the output."
                     } &= help "Run MTLR testing on a directory of data." &= explicit &= name "test"
+                    
+modelArgs = MTLRImputation { input = def &= explicit &= name "i" &= typDir &= help "input directory"
+                           , method = def &= explicit &= name "w" &= help "imputation method"
+                           } &= help "Run imputation on all of the things." &= explicit &= name "test"
 
 main = do args <- cmdArgs (modes [trainArgs, testArgs] &= program "BatchMTLR")
           case args of
@@ -87,8 +95,10 @@ main = do args <- cmdArgs (modes [trainArgs, testArgs] &= program "BatchMTLR")
             MTLRTrain {} -> train args
             MTLRTest {input=""} -> error "Please specify an input directory!"
             MTLRTest {} -> test args
+            MTLRImputation {input=""} -> error "Please specify an input directory!"
+            MTLRImputation {} -> imputation args
 
- 
+
 -- | Run MTLR training.
 train args = do dir <- readDirectoryWith return (input args)
                 let filePairs =  map (fileToArgs (output args)) . F.toList $ dirTree dir
@@ -118,6 +128,12 @@ test args = do dir <- readDirectoryWith return (input args)
                    , if intervalFile args /= "" then "-q" else "", intervalFile args
                    ]
                    
+-- | Run imputation stuffs.
+imputation args = do dir <- readDirectoryWith return (input args)
+                     let files = F.toList $ dirTree dir
+                     mapM_ runImputation files
+  where runImputation f = callProcess "Rscript" ["imputation.R", method args ++ ".imp", f]
+
 fileToArgs :: FilePath -> FilePath -> [ArgumentFile]
 fileToArgs modelDir inFile = [("-i", inFile), ("-o", modelFile)]
   where modelFile = combine modelDir . joinPath . tail . splitPath $ replaceExtension inFile "model"
