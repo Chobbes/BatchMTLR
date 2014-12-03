@@ -87,7 +87,7 @@ testArgs = MTLRTest { input = def &= explicit &= name "i" &= typDir &= help "inp
                     
 modelArgs = MTLRImputation { input = def &= explicit &= name "i" &= typDir &= help "input directory"
                            , method = def &= explicit &= name "w" &= help "imputation method"
-                           } &= help "Run imputation on all of the things." &= explicit &= name "test"
+                           } &= help "Run imputation on all of the things." &= explicit &= name "imputation"
 
 main = do args <- cmdArgs (modes [trainArgs, testArgs] &= program "BatchMTLR")
           case args of
