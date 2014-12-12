@@ -61,6 +61,11 @@ data MTLRArgs = MTLRTrain { regConst1 :: Double
               | MTLRImputation { input :: FilePath
                                , method :: String
                                }
+                               
+              | MTLRKill { num :: Integer
+                         , input :: FilePath
+                         , combineName :: FilePath
+                         }
 
                 deriving (Show, Data, Typeable) 
 
@@ -88,8 +93,13 @@ testArgs = MTLRTest { input = def &= explicit &= name "i" &= typDir &= help "inp
 modelArgs = MTLRImputation { input = def &= explicit &= name "i" &= typDir &= help "input directory"
                            , method = def &= explicit &= name "w" &= help "imputation method"
                            } &= help "Run imputation on all of the things." &= explicit &= name "imputation"
+                           
+killArgs = MTLRKill { num = 0 &= help "Number of imputations to use"
+                    , input = "" &= help "Input directory"
+                    , combineName = "" &= help "Combined file name"
+                    } &= help "Run MultiKill to generate single models." &= explicit &= name "kill"
 
-main = do args <- cmdArgs (modes [trainArgs, testArgs, modelArgs] &= program "BatchMTLR")
+main = do args <- cmdArgs (modes [trainArgs, testArgs, modelArgs, killArgs] &= program "BatchMTLR")
           case args of
             MTLRTrain {input=""} -> error "Please specify an input directory!"
             MTLRTrain {} -> train args
@@ -97,6 +107,10 @@ main = do args <- cmdArgs (modes [trainArgs, testArgs, modelArgs] &= program "Ba
             MTLRTest {} -> test args
             MTLRImputation {input=""} -> error "Please specify an input directory!"
             MTLRImputation {} -> imputation args
+            MTLRKill {input=""} -> error "Please specify an input directory!"
+            MTLRKill {combineName=""} -> error "Please specify the name of the output files!"
+            MTLRKill {num=0} -> error "Please specify a number greater than 0, and less than the total numberof imputations."
+            MTLRKill {} -> kill args
 
 
 -- | Run MTLR training.
@@ -131,6 +145,21 @@ imputation args = do dir <- readDirectoryWith return (input args)
                      let files = F.toList $ dirTree dir
                      mapM_ runImputation files
   where runImputation f = callProcess "Rscript" ["run_script.R", method args ++ ".imp", f, "10"]
+
+
+-- | Run MultiKill on models.
+kill args = do dir <- readDirectoryWith return (input args)
+               let files = F.toList $ dirTree dir
+               let dirs = nub $ map takeDirectory files
+               mapM_ (killDir (num args) (combineName args)) dirs
+
+killDir :: Integer -> FilePath -> FilePath -> IO ()
+killDir num combineName dir = do relModelFiles <- getDirectoryContents dir
+                                 let absModelFiles = map (\c -> joinPath [dir, c]) relModelFiles
+                                 modelFiles <- filterM doesFileExist absModelFiles
+                                 callProcess "MultiKill" (show num : outFile : modelFiles)
+  where outFile = joinPath (((main ++ "_" ++ (show num)) : rest) ++ [combineName])
+        (main:rest) = splitDirectories dir
 
 fileToArgs :: FilePath -> FilePath -> [ArgumentFile]
 fileToArgs modelDir inFile = [("-i", inFile), ("-o", modelFile)]
