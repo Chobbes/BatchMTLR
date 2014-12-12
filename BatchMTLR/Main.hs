@@ -37,8 +37,8 @@ import System.Directory.Tree hiding (name)
 import System.FilePath
 import System.Process
 
-data MTLRArgs = MTLRTrain { regConst1 :: Integer
-                          , regConst2 :: Integer
+data MTLRArgs = MTLRTrain { regConst1 :: Double
+                          , regConst2 :: Double
                           , input :: FilePath
                           , output :: FilePath
                           , timePoints :: Integer
