@@ -108,7 +108,6 @@ train args = do dir <- readDirectoryWith return (input args)
         mtlrArgs = [ "-c", show $ regConst1 args, "-d", show $ regConst2 args, "-m"
                    , show $ timePoints args, "-w", weight args
                    , "-u", show $ uncensored args
-                   , if intervalFile args /= "" then "-q" else "", intervalFile args
                    ]
 
 -- | Run MTLR testing.
@@ -125,7 +124,6 @@ test args = do dir <- readDirectoryWith return (input args)
         mtlrArgs = [ "-m", show $ timePoints args, "-l", loss args
                    , if printDistribution args then "-p" else ""
                    , "-u", show $ uncensored args
-                   , if intervalFile args /= "" then "-q" else "", intervalFile args
                    ]
                    
 -- | Run imputation stuffs.
